@@ -5,33 +5,47 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"sync/atomic"
+	"os"
 
+	"github.com/gertanoh/loadbalancer/internal/helpers"
 	"github.com/gertanoh/loadbalancer/internal/server"
-)
-
-// TODO user serf for services discovery here, now hard coded
-var (
-	servers = []string{"http://localhost:4001", "http://localhost:4002", "http://localhost:4003"}
-	counter int32 // round robin index
+	"github.com/google/uuid"
+	"github.com/hashicorp/logutils"
 )
 
 const (
 	port = 8080
 )
 
-func roundRobinSelector() string {
-	value := atomic.AddInt32(&counter, 1)
-	return servers[int(value)%len(servers)]
-}
+var srvPool *helpers.ServerPool
+
+type SerfClusterHandler struct{}
+
 func main() {
 
+	filter := &logutils.LevelFilter{
+		Levels:   []logutils.LogLevel{"DEBUG", "WARN", "ERROR"},
+		MinLevel: logutils.LogLevel("WARN"),
+		Writer:   os.Stderr,
+	}
+	log.SetOutput(filter)
 	log.Println("Load Balancer on port 8080")
 
+	srvPool = helpers.NewServerPool()
+
 	handler := handleConnection()
+
 	var config server.Config
 	config.HttpAddr = fmt.Sprintf(":%d", port)
 	config.Handler = handler
+	config.BindAddr = fmt.Sprintf("127.0.0.1:%d", 8400)
+	config.NodeName = fmt.Sprintf("agent-%s", uuid.New())
+	config.Tags = map[string]string{
+		"http_addr":        config.HttpAddr,
+		"is_load_balancer": "true",
+	}
+	serfHandler := &SerfClusterHandler{}
+	config.MembershipHandler = serfHandler
 
 	srv, err := server.New(config)
 	if err != nil {
@@ -54,11 +68,14 @@ func handleConnection() http.Handler {
 			}
 		}
 
-		// Forward
-		// TODO round robin and servers discovery
-		server := roundRobinSelector()
+		server, err := srvPool.GetNextServer()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
 		log.Println("server addr: ", server)
-		resp, err := http.Get(server + r.URL.Path)
+		address := "http://" + server.Address
+		resp, err := http.Get(address + r.URL.Path)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
@@ -75,4 +92,20 @@ func handleConnection() http.Handler {
 		w.Header().Set("Content-Type", "text/plain")
 		w.Write(body)
 	})
+}
+
+func (h *SerfClusterHandler) Join(id, addr, isLoadBalancer string) error {
+	srv := helpers.Server{
+		ID:      id,
+		Address: addr,
+	}
+	srvPool.AddServer(srv)
+	log.Println("Join cluster ", id, addr)
+	return nil
+}
+
+func (h *SerfClusterHandler) Leave(id string) error {
+	srvPool.RemoveServer(id)
+	log.Println("left cluster")
+	return nil
 }

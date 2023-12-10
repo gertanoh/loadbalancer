@@ -3,6 +3,8 @@ module github.com/gertanoh/loadbalancer
 go 1.21.3
 
 require (
+	github.com/google/uuid v1.4.0
+	github.com/hashicorp/logutils v1.0.0
 	github.com/hashicorp/serf v0.10.1
 	github.com/stretchr/testify v1.4.0
 )

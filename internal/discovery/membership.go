@@ -28,14 +28,15 @@ type Handler interface {
 }
 
 func New(handler Handler, config Config) (*Membership, error) {
-	c := &Membership{
+
+	m := &Membership{
 		Config:  config,
 		handler: handler,
 	}
-	if err := c.setupSerf(); err != nil {
+	if err := m.setupSerf(); err != nil {
 		return nil, err
 	}
-	return c, nil
+	return m, nil
 }
 
 func (m *Membership) setupSerf() error {
@@ -43,6 +44,7 @@ func (m *Membership) setupSerf() error {
 	if err != nil {
 		return err
 	}
+
 	config := serf.DefaultConfig()
 	config.Init()
 	config.MemberlistConfig.BindAddr = addr.IP.String()
@@ -93,7 +95,7 @@ func (m *Membership) eventHandler() {
 func (m *Membership) handleJoin(member serf.Member) {
 	if err := m.handler.Join(
 		member.Name,
-		member.Tags["rpc_addr"],
+		member.Tags["http_addr"],
 		member.Tags["is_load_balancer"],
 	); err != nil {
 		log.Println(err, "failed to join", member)

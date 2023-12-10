@@ -2,13 +2,12 @@ package discovery_test
 
 import (
 	"fmt"
-	"log"
-	"net"
 	"strconv"
 	"testing"
 	"time"
 
 	. "github.com/gertanoh/loadbalancer/internal/discovery"
+	"github.com/gertanoh/loadbalancer/internal/helpers"
 	"github.com/hashicorp/serf/serf"
 	"github.com/stretchr/testify/require"
 )
@@ -44,26 +43,14 @@ func TestMembership(t *testing.T) {
 	require.Equal(t, fmt.Sprintf("%d", 2), <-handler.leaves)
 }
 
-// getRandomPort starts a listener on a random port
-// and returns the port number.
-func getRandomPort() int {
-	ln, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer ln.Close()
-
-	return ln.Addr().(*net.TCPAddr).Port
-}
-
 func setupMember(t *testing.T, members []*Membership, isLoadBalancer bool) ([]*Membership,
 	*handler) {
 
 	id := len(members)
-	port := getRandomPort()
+	port := helpers.GetRandomPort()
 	addr := fmt.Sprintf("%s:%d", "127.0.0.1", port)
 	tags := map[string]string{
-		"rpc_addr":         addr,
+		"http_addr":        addr,
 		"is_load_balancer": strconv.FormatBool(isLoadBalancer),
 	}
 
