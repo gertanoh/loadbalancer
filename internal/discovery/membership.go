@@ -23,7 +23,7 @@ type Membership struct {
 }
 
 type Handler interface {
-	Join(name, addr string) error
+	Join(name, addr, isLoadBalancer string) error
 	Leave(name string) error
 }
 
@@ -94,6 +94,7 @@ func (m *Membership) handleJoin(member serf.Member) {
 	if err := m.handler.Join(
 		member.Name,
 		member.Tags["rpc_addr"],
+		member.Tags["is_load_balancer"],
 	); err != nil {
 		log.Println(err, "failed to join", member)
 	}
